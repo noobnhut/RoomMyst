@@ -52,11 +52,11 @@ const SYSTEM_INSTRUCTION_JSON = {
 const SYSTEM_PROMPT = JSON.stringify(SYSTEM_INSTRUCTION_JSON);
 
 export const generateViralContent = async (req: GenerationRequest): Promise<GeneratedContent> => {
-  if (!process.env.API_KEY) {
+  if (!import.meta.env.VITE_API_KEY) {
     throw new Error("API Key is missing.");
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 
   // Define strict length rules to force the model to comply
   const lengthRules = {

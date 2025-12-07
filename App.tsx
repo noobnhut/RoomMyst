@@ -76,7 +76,7 @@ const App: React.FC = () => {
         <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
           <div className="text-center md:text-left">
             <h1 className="text-3xl md:text-4xl font-display font-bold tracking-tighter cursor-pointer" onClick={() => setView('generator')}>
-              Viral<span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">Flow</span>
+              Room<span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">Myst</span>
             </h1>
           </div>
           
@@ -175,7 +175,7 @@ const App: React.FC = () => {
                         Generating Hype...
                       </>
                     ) : (
-                      'Generate Viral Content'
+                      'Generate Content'
                     )}
                   </Button>
                 </div>

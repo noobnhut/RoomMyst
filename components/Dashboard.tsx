@@ -93,12 +93,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelect, onNew }) => {
             onClick={() => onSelect(item)}
             className="group cursor-pointer glass-panel rounded-2xl p-6 hover:bg-slate-800/90 transition-all duration-300 border border-slate-700/50 hover:border-purple-500/50 hover:shadow-xl hover:shadow-purple-900/10 hover:-translate-y-1"
           >
-            <div className="flex justify-between items-start mb-4">
+            {/* <div className="flex justify-between items-start mb-4">
               <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold bg-slate-900/50 px-2 py-1 rounded">
                 {new Date(item.created_at).toLocaleDateString()}
               </span>
-              <Badge>{item.data.tone_used.replace('modern viral fomo', 'Viral')}</Badge>
-            </div>
+              <Badge>{item.data.tone_used}</Badge>
+            </div> */}
             
             <h3 className="font-bold text-lg text-white mb-3 line-clamp-2 group-hover:text-purple-300 transition-colors">
               {item.topic}
