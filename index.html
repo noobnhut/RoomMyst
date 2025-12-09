@@ -1,28 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RoomMyst - Content Generator</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
-  <script type="importmap">
-{
-  "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
-    "react": "https://aistudiocdn.com/react@^19.2.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0",
-    "vite": "https://aistudiocdn.com/vite@^7.2.6",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
-    "@tailwindcss/vite": "https://aistudiocdn.com/@tailwindcss/vite@^4.1.17",
-    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.86.2"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>RoomMyst – AI Generator</title>
+
+  <!-- SEO Meta -->
+  <meta name="description" content="RoomMyst – AI generator platform giúp tạo nội dung nhanh, tối ưu SEO, tốc độ tải trang nhanh và giao diện hiện đại." />
+  <meta name="keywords" content="AI generator, RoomMyst, content generator, AI tools, SEO tools" />
+  <meta name="author" content="RoomMyst Team" />
+
+  <!-- Open Graph (SEO Social) -->
+  <meta property="og:title" content="RoomMyst – AI Generator" />
+  <meta property="og:description" content="Công cụ AI tạo nội dung nhanh, mượt, tối ưu SEO cho mọi website." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/assets/og-image.png" />
+  <meta property="og:url" content="https://roommyst.com" />
+
+  <!-- Favicon / Web Avatar -->
+  <!-- Thay bằng đường dẫn icon thật của bạn -->
+  <link rel="icon" type="image/png" href="/logo.jpg" />
+  <link rel="apple-touch-icon" href="/logo.jpg" sizes="180x180" />
+
+  <!-- Performance: Font optimization -->
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+
+  <!-- Preload font để tránh CLS -->
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" />
+
+ 
+
 </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
-  </body>
+
+<body>
+  <div id="root"></div>
+
+  <!-- Main App -->
+  <script type="module" src="/index.tsx"></script>
+</body>
 </html>

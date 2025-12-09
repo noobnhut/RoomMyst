@@ -1,202 +1,241 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ContentMode, ContentLength, ContentStyle, GeneratedContent, GenerationRequest, DatabaseItem } from './types';
-import { generateViralContent } from './services/gemini';
-import { saveContent } from './services/supabase';
-import { Button, Select, Card } from './components/UIComponents';
-import ResultView from './components/ResultView';
-import Dashboard from './components/Dashboard';
+import { GeneratedContent, DatabaseItem, UserProfile } from './types';
 
-type ViewState = 'generator' | 'library';
+// Lazy load components
+const Generator = React.lazy(() => import('./components/Generator'));
+const Dashboard = React.lazy(() => import('./components/Dashboard'));
+const LoginView = React.lazy(() => import('./components/LoginView'));
+const LandingPage = React.lazy(() => import('./components/LandingPage'));
+const ArticleViewer = React.lazy(() => import('./components/ArticleViewer'));
+
+const LoadingFallback = () => (
+  <div className="min-h-screen w-full bg-neutral-50"></div>
+);
 
 const App: React.FC = () => {
-  const [view, setView] = useState<ViewState>('generator');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<GeneratedContent | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Auth State
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const isMounted = useRef(true);
 
-  // If viewing a history item, we want to know so we can show "ReadOnly" mode or just prepopulate
-  const [viewingHistoryItem, setViewingHistoryItem] = useState<boolean>(false);
+  // Router State
+  // We use window.location.pathname as the source of truth
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
 
-  const [formData, setFormData] = useState<GenerationRequest>({
-    topic: '',
-    mode: 'general',
-    style: 'general',
-    length: 'medium'
-  });
+  // Data Synchronization State
+  const [lastUpdated, setLastUpdated] = useState<number>(Date.now());
 
-  const handleGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.topic.trim()) return;
-
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    setViewingHistoryItem(false);
-
-    try {
-      const data = await generateViralContent(formData);
-      setResult(data);
-    } catch (err: any) {
-      setError(err.message || "Something went wrong. Please check your API Key and try again.");
-    } finally {
-      setLoading(false);
-    }
+  // Simple navigation function
+  const navigate = (path: string) => {
+    window.history.pushState({}, '', path);
+    setCurrentPath(path);
+    window.scrollTo(0, 0); // Ensure scroll to top on nav
   };
 
-  const handleSaveToLibrary = async (topic: string, data: GeneratedContent) => {
-    await saveContent(topic, data);
-  };
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(window.location.pathname);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Optimized Auth Initialization
+  useEffect(() => {
+    isMounted.current = true;
+    let authSubscription: { unsubscribe: () => void } | null = null;
+
+    const initAuth = async () => {
+      try {
+        const [{ supabase }, { syncUserProfile }] = await Promise.all([
+           import('./services/supabase'),
+           import('./services/auth')
+        ]);
+
+        if (!supabase) {
+          if (isMounted.current) setCheckingSession(false);
+          return;
+        }
+
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user && isMounted.current) {
+          const profile = await syncUserProfile(session.user);
+          if (isMounted.current) setUserProfile(profile);
+        }
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (!isMounted.current) return;
+
+          if (event === 'SIGNED_OUT') {
+            setUserProfile(null);
+            navigate('/'); // Redirect to landing on logout
+          } else if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')) {
+             const profile = await syncUserProfile(session.user);
+             if (isMounted.current) setUserProfile(profile);
+           
+             if (window.location.pathname === '/') {
+               navigate('/');
+             }
+          }
+        });
+        
+        authSubscription = subscription;
+
+      } catch (err) {
+        console.error("Session check error:", err);
+      } finally {
+        if (isMounted.current) setCheckingSession(false);
+      }
+    };
+
+    initAuth();
+
+    return () => {
+      isMounted.current = false;
+      if (authSubscription) authSubscription.unsubscribe();
+    };
+  }, []);
 
   const handleSelectHistoryItem = (item: DatabaseItem) => {
-    setResult(item.data);
-    // When viewing history, we might want to set the topic in form data too, just in case they want to regenerate
-    setFormData(prev => ({ ...prev, topic: item.topic }));
-    setViewingHistoryItem(true);
-    setView('generator');
+    // Navigate to the dynamic route
+    navigate(`/library/${item.id}`);
   };
 
-  const handleReset = () => {
-    setResult(null);
-    setViewingHistoryItem(false);
-    setView('generator');
+  const handleLogout = async () => {
+    const { signOut } = await import('./services/auth');
+    await signOut();
+    navigate('/');
   };
 
+  const handleContentSaved = () => {
+    setLastUpdated(Date.now());
+  };
+
+  const handleNewProject = () => {
+    navigate('/generator');
+  };
+
+  // -------------------------------------------------------------------------
+  // Render Logic
+  // -------------------------------------------------------------------------
+
+  if (checkingSession) {
+    return <div className="min-h-screen bg-neutral-50"></div>;
+  }
+
+  // Route: Landing Page (Root)
+  if (currentPath === '/') {
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <LandingPage 
+          onGetStarted={() => navigate(userProfile ? '/generator' : '/generator')} 
+          onLogin={() => navigate('/generator')}
+          isLoggedIn={!!userProfile}
+        />
+      </Suspense>
+    );
+  }
+
+  // Protected Routes Wrapper
+  if (!userProfile) {
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <LoginView />
+      </Suspense>
+    );
+  }
+
+  // Detect Dynamic Route: /library/:id
+  const isLibraryDetail = currentPath.startsWith('/library/');
+  const libraryDetailId = isLibraryDetail ? currentPath.split('/').pop() : null;
+
+  // App Layout (Navbar + Content)
   return (
-    <div className="min-h-screen bg-[#0f172a] text-white selection:bg-pink-500 selection:text-white pb-20">
-      {/* Background Decor */}
-      <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-900/20 rounded-full blur-[120px] animate-float"></div>
-        <div className="absolute bottom-[10%] right-[-5%] w-[30%] h-[30%] bg-pink-900/20 rounded-full blur-[100px] animate-float" style={{ animationDelay: '2s' }}></div>
-      </div>
-
-      <div className="relative z-10 max-w-5xl mx-auto px-4 py-8 md:py-12">
+    <div className="min-h-screen bg-neutral-50 text-gray-900 selection:bg-gray-900 selection:text-white pb-20">
+      <div className="relative z-10 max-w-6xl mx-auto px-4 py-6">
         
-        {/* Navigation / Header */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
-          <div className="text-center md:text-left">
-            <h1 className="text-3xl md:text-4xl font-display font-bold tracking-tighter cursor-pointer" onClick={() => setView('generator')}>
-              Room<span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">Myst</span>
+        {/* Persistent Navigation */}
+        <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6 border-b border-gray-200 pb-6">
+          <div className="text-center md:text-left flex-1 cursor-pointer" onClick={() => navigate('/')}>
+            <h1 className="text-2xl font-display font-bold tracking-tighter text-gray-900">
+              Room<span className="text-gray-400">Myst</span>
             </h1>
           </div>
           
-          <div className="flex bg-slate-800/50 p-1 rounded-xl border border-slate-700/50 backdrop-blur-sm">
+          <div className="flex bg-white p-1 rounded-lg border border-gray-200 shadow-sm">
             <button 
-              onClick={() => setView('generator')}
-              className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${view === 'generator' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              onClick={handleNewProject}
+              className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${currentPath === '/generator' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
             >
               Generator
             </button>
             <button 
-              onClick={() => setView('library')}
-              className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${view === 'library' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+              onClick={() => navigate('/library')}
+              // Highlight Library tab if on library root OR viewing an article
+              className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${currentPath === '/library' || isLibraryDetail ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:text-gray-900'}`}
             >
               Library
             </button>
+             <button 
+              onClick={() => window.open('https://aistudio.google.com/generate-speech?model=gemini-2.5-pro-preview-tts', '_blank')}
+              className="px-6 py-2 rounded-md text-sm font-bold transition-all text-gray-500 hover:text-gray-900"
+            >
+              Voiceover ↗
+            </button>
+          </div>
+
+          <div className="flex-1 flex justify-end">
+            <div className="flex items-center gap-3 bg-white p-2 pl-4 rounded-full border border-gray-200 shadow-sm">
+               <div className="md:flex flex-col text-right hidden sm:block">
+                 <span className="text-xs font-bold text-gray-900 leading-none">{userProfile.fullname}</span>
+               </div>
+               {userProfile.avatar ? (
+                 <img src={userProfile.avatar} alt="Avatar" className="w-8 h-8 rounded-full border border-gray-200 object-cover" />
+               ) : (
+                 <div className="w-8 h-8 rounded-full bg-gray-900 text-white flex items-center justify-center text-xs font-bold uppercase">
+                   {userProfile.fullname.charAt(0)}
+                 </div>
+               )}
+               <button 
+                 onClick={handleLogout}
+                 className="ml-2 text-gray-400 hover:text-gray-900 p-1 hover:bg-gray-100 rounded-full transition-colors"
+                 title="Log out"
+               >
+                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                 </svg>
+               </button>
+            </div>
           </div>
         </div>
 
-        {/* View Routing */}
-        {view === 'library' ? (
-          <Dashboard onSelect={handleSelectHistoryItem} onNew={() => setView('generator')} />
-        ) : (
-          <>
-             {/* Tagline (only show if no result) */}
-            {!result && (
-              <div className="text-center mb-10 animate-in fade-in slide-in-from-top-4 duration-700">
-                 <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-                  Transform simple ideas into high-octane, FOMO-inducing content for social media domination.
-                </p>
-              </div>
-            )}
+        {/* Content Render based on Route */}
+        <Suspense fallback={<LoadingFallback />}>
+          {isLibraryDetail && libraryDetailId ? (
+            <ArticleViewer 
+              id={libraryDetailId} 
+              onBack={() => navigate('/library')}
+              currentUserId={userProfile.id}
+            />
+          ) : currentPath === '/library' ? (
+            <Dashboard 
+              onSelect={handleSelectHistoryItem} 
+              onNew={handleNewProject} 
+              currentUserId={userProfile.id}
+              lastUpdated={lastUpdated} 
+            />
+          ) : (
+            <Generator 
+              userProfile={userProfile} 
+              onContentSaved={handleContentSaved} 
+              // Generator no longer handles initialItem for history, purely for creation now
+            />
+          )}
+        </Suspense>
 
-            {/* Input Form - Hidden when result shows */}
-            {!result ? (
-              <form onSubmit={handleGenerate} className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-700 delay-150">
-                
-                <div className="relative group">
-                  <div className="absolute -inset-1 bg-gradient-to-r from-pink-600 to-purple-600 rounded-2xl blur opacity-25 group-hover:opacity-75 transition duration-1000 group-hover:duration-200"></div>
-                  <textarea
-                    value={formData.topic}
-                    onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
-                    placeholder="What's your topic? (e.g., 'Solo traveling to Japan on a budget' or 'New iPhone 16 launch')"
-                    className="relative w-full bg-slate-900/90 text-white placeholder-slate-500 border border-slate-700 rounded-xl p-6 text-xl focus:outline-none focus:ring-2 focus:ring-purple-500 min-h-[160px] resize-none"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Select 
-                    label="Mode" 
-                    value={formData.mode} 
-                    onChange={(e) => setFormData({...formData, mode: e.target.value as ContentMode})}
-                  >
-                    <option value="general">General</option>
-                    <option value="travel">Travel</option>
-                    <option value="myth-storytelling">Myth/Story</option>
-                    <option value="marketing">Marketing</option>
-                    <option value="sales">Sales</option>
-                    <option value="lifestyle">Lifestyle</option>
-                    <option value="tts">Voiceover Script</option>
-                  </Select>
-
-                  <Select 
-                    label="Tone & Style" 
-                    value={formData.style} 
-                    onChange={(e) => setFormData({...formData, style: e.target.value as ContentStyle})}
-                  >
-                    <option value="general">Standard Viral</option>
-                    <option value="cinematic">Cinematic</option>
-                    <option value="emotional">Emotional</option>
-                    <option value="mystery">Mystery/Hook</option>
-                    <option value="humor">Humorous</option>
-                    <option value="motivational">Motivational</option>
-                  </Select>
-
-                  <Select 
-                    label="Length" 
-                    value={formData.length} 
-                    onChange={(e) => setFormData({...formData, length: e.target.value as ContentLength})}
-                  >
-                    <option value="short">Short (Reels/Shorts)</option>
-                    <option value="medium">Medium (Caption)</option>
-                    <option value="long">Long (Script)</option>
-                  </Select>
-                </div>
-
-                <div className="pt-4">
-                  <Button type="submit" disabled={loading} className="w-full text-lg">
-                    {loading ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Generating Hype...
-                      </>
-                    ) : (
-                      'Generate Content'
-                    )}
-                  </Button>
-                </div>
-
-                {error && (
-                  <div className="p-4 bg-red-500/10 border border-red-500/50 rounded-xl text-red-200 text-sm text-center">
-                    {error}
-                  </div>
-                )}
-              </form>
-            ) : (
-              <ResultView 
-                data={result} 
-                topic={formData.topic} 
-                onReset={handleReset} 
-                onSave={handleSaveToLibrary}
-                isReadOnly={viewingHistoryItem}
-              />
-            )}
-          </>
-        )}
       </div>
     </div>
   );

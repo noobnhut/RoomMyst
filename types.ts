@@ -1,3 +1,4 @@
+
 export interface GeneratedContent {
   content: string;
   captions: string[];
@@ -42,4 +43,12 @@ export interface DatabaseItem {
   created_at: string;
   topic: string;
   data: GeneratedContent;
+  user_id: string; // Added user_id to track ownership
+}
+
+export interface UserProfile {
+  id: string;
+  fullname: string;
+  avatar: string;
+  apikey?: string; // Encrypted API Key
 }

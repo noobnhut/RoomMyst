@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { GeneratedContent, GenerationRequest } from "../types";
 
@@ -51,12 +52,13 @@ const SYSTEM_INSTRUCTION_JSON = {
 
 const SYSTEM_PROMPT = JSON.stringify(SYSTEM_INSTRUCTION_JSON);
 
-export const generateViralContent = async (req: GenerationRequest): Promise<GeneratedContent> => {
-  if (!process.env.API_KEY) {
-    throw new Error("API Key is missing.");
+export const generateViralContent = async (req: GenerationRequest, apiKey: string): Promise<GeneratedContent> => {
+  if (!apiKey) {
+    throw new Error("API Key is missing. Please check your account settings.");
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Initialize with the user-provided, decrypted key
+  const ai = new GoogleGenAI({ apiKey: apiKey });
 
   // Define strict length rules to force the model to comply
   const lengthRules = {
